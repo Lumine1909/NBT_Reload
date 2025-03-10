@@ -8,7 +8,6 @@ import dev.dewy.nbt.io.CompressionType;
 import dev.dewy.nbt.io.NbtReader;
 import dev.dewy.nbt.io.NbtWriter;
 import dev.dewy.nbt.tags.collection.CompoundTag;
-import lombok.Cleanup;
 import lombok.NonNull;
 
 import java.io.*;
@@ -21,8 +20,6 @@ import java.util.zip.InflaterInputStream;
 
 /**
  * Standard interface for reading and writing NBT data structures.
- *
- * @author dewy
  */
 public class Nbt {
     private @NonNull Gson gson;
@@ -105,21 +102,23 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public void toFile(@NonNull CompoundTag compound, @NonNull File file, @NonNull CompressionType compression) throws IOException {
-        @Cleanup BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(file));
-        @Cleanup DataOutputStream dos = null;
+        try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(file));
+             DataOutputStream dos = new DataOutputStream(getOutputStream(bos, compression))) {
+            this.toStream(compound, dos);
+        }
+    }
 
+    private OutputStream getOutputStream(OutputStream outputStream, CompressionType compression) throws IOException {
         switch (compression) {
             case NONE:
-                dos = new DataOutputStream(bos);
-                break;
+                return outputStream;
             case GZIP:
-                dos = new DataOutputStream(new GZIPOutputStream(bos));
-                break;
+                return new GZIPOutputStream(outputStream);
             case ZLIB:
-                dos = new DataOutputStream(new DeflaterOutputStream(bos));
+                return new DeflaterOutputStream(outputStream);
+            default:
+                throw new IllegalArgumentException("Unsupported compression type: " + compression);
         }
-
-        this.toStream(compound, dos);
     }
 
     /**
@@ -140,9 +139,9 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public void toJson(@NonNull CompoundTag compound, @NonNull File file) throws IOException {
-        @Cleanup FileWriter writer = new FileWriter(file);
-
-        gson.toJson(compound.toJson(0, this.typeRegistry), writer);
+        try (FileWriter writer = new FileWriter(file)) {
+            gson.toJson(compound.toJson(0, this.typeRegistry), writer);
+        }
     }
 
     /**
@@ -153,12 +152,11 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public byte[] toByteArray(@NonNull CompoundTag compound) throws IOException {
-        @Cleanup ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        @Cleanup DataOutputStream w = new DataOutputStream(baos);
-
-        this.toStream(compound, w);
-
-        return baos.toByteArray();
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            this.toStream(compound, dos);
+            return baos.toByteArray();
+        }
     }
 
     /**
@@ -191,25 +189,20 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public CompoundTag fromFile(@NonNull File file) throws IOException {
-        @Cleanup BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
-        @Cleanup DataInputStream in = null;
-
-        @Cleanup FileInputStream fis = new FileInputStream(file);
-        switch (CompressionType.getCompression(fis)) {
-            case NONE:
-                in = new DataInputStream(bis);
-                break;
-            case GZIP:
-                in = new DataInputStream(new GZIPInputStream(bis));
-                break;
-            case ZLIB:
-                in = new DataInputStream(new InflaterInputStream(bis));
-                break;
-            default:
-                throw new IllegalStateException("Illegal compression type. This should never happen.");
+        try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
+             FileInputStream fis = new FileInputStream(file);
+             DataInputStream in = new DataInputStream(getInputStream(bis, fis))) {
+            return this.fromStream(in);
         }
+    }
 
-        return this.fromStream(in);
+    private InputStream getInputStream(InputStream inputStream, FileInputStream fis) throws IOException {
+        return switch (CompressionType.getCompression(fis)) {
+            case NONE -> inputStream;
+            case GZIP -> new GZIPInputStream(inputStream);
+            case ZLIB -> new InflaterInputStream(inputStream);
+            default -> throw new IllegalStateException("Illegal compression type. This should never happen.");
+        };
     }
 
     /**
@@ -220,9 +213,9 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public CompoundTag fromJson(@NonNull File file) throws IOException {
-        @Cleanup FileReader reader = new FileReader(file);
-
-        return new CompoundTag().fromJson(gson.fromJson(reader, JsonObject.class), 0, this.typeRegistry);
+        try (FileReader reader = new FileReader(file)) {
+            return new CompoundTag().fromJson(gson.fromJson(reader, JsonObject.class), 0, this.typeRegistry);
+        }
     }
 
     /**
@@ -233,9 +226,9 @@ public class Nbt {
      * @throws IOException if any I/O error occurs.
      */
     public CompoundTag fromByteArray(@NonNull byte[] bytes) throws IOException {
-        @Cleanup DataInputStream bais = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(bytes)));
-
-        return fromStream(bais);
+        try (DataInputStream bais = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(bytes)))) {
+            return fromStream(bais);
+        }
     }
 
     /**
