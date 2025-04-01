@@ -28,12 +28,21 @@ java {
 }
 
 publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/Lumine1909/NBT_Reload")
+            credentials {
+                username = (project.findProperty("gpr.user") ?: System.getenv("USERNAME")) as String
+                password = (project.findProperty("gpr.key") ?: System.getenv("TOKEN")) as String
+            }
+        }
+    }
     publications {
-        create<MavenPublication>("mavenJava") {
+        register<MavenPublication>("gpr") {
             from(components["java"])
-
             pom {
-                name.set("NBT")
+                name.set("nbt")
                 description.set("Flexible and intuitive library for reading and writing Minecraft's NBT format, with emphasis on custom tags.")
                 url.set("https://github.com/Lumine1909/NBT_Reload")
                 packaging = "jar"
