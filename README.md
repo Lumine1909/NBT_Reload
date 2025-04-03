@@ -53,7 +53,7 @@ repositories {
 }
 
 dependencies {
-    implementation "dev.dewy:nbt:1.5.1"
+    implementation "io.github.lumine1909:nbt:1.6.0"
 }
 ```
 
